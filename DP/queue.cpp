@@ -136,6 +136,6 @@ int main() {
     this_thread::sleep_for(chrono::seconds(30));
     
     dp.stop();
-    cout << "\033[32mSimulation ended\033[0m" << endl;
+    cout << "\033[32mSimulation complete!\033[0m" << endl;
     return 0;
 }
