@@ -5,6 +5,7 @@
 #include <vector>
 #include <chrono>
 #include <string>
+#include <atomic>
 
 using namespace std;
 
@@ -19,6 +20,7 @@ vector<int> philosophers = {0, 1, 2, 3, 4};
 mutex mtx;
 mutex coutMutex; // Mutex for synchronized console output
 condition_variable cv[N];
+atomic<bool> should_terminate(false); // Flag to signal threads to terminate
 
 #define LEFT(phnum) ((phnum + N - 1) % N)
 #define RIGHT(phnum) ((phnum + 1) % N)
@@ -47,12 +49,12 @@ void take_fork(int phnum) {
     unique_lock<mutex> lock(mtx);
 
     state[phnum] = HUNGRY;
-    atomicPrint("Philosopher " + to_string(phnum + 1) + " is Hungry", YELLOW);
+    atomicPrint("Philosopher " + to_string(phnum + 1) + " is Hungry", RED);
 
     test(phnum);
 
-    while (state[phnum] != EATING) {
-        cv[phnum].wait(lock);
+    while (state[phnum] != EATING && !should_terminate) {
+        cv[phnum].wait_for(lock, chrono::milliseconds(100));
     }
 }
 
@@ -62,32 +64,46 @@ void put_fork(int phnum) {
     state[phnum] = THINKING;
     atomicPrint("Philosopher " + to_string(phnum + 1) + " putting fork " +
                 to_string(LEFT(phnum) + 1) + " and " + to_string(phnum + 1) + " down", MAGENTA);
-    atomicPrint("Philosopher " + to_string(phnum + 1) + " is thinking", CYAN);
+    atomicPrint("Philosopher " + to_string(phnum + 1) + " is thinking", YELLOW);
 
     test(LEFT(phnum));
     test(RIGHT(phnum));
 }
 
 void philosopher(int phnum) {
-    while (true) {
+    while (!should_terminate) {
         this_thread::sleep_for(chrono::seconds(1));
         take_fork(phnum);
-        this_thread::sleep_for(chrono::seconds(1));
-        put_fork(phnum);
+        if (!should_terminate) {
+            this_thread::sleep_for(chrono::seconds(1));
+            put_fork(phnum);
+        }
     }
 }
 
 int main() {
+    const int simulation_duration = 10; // Simulation time in seconds
     vector<thread> threads(N);
 
+    // Start threads
     for (int i = 0; i < N; ++i) {
-        atomicPrint("Philosopher " + to_string(i + 1) + " is thinking", RED);
         threads[i] = thread(philosopher, i);
     }
 
+    // Sleep for simulation duration
+    this_thread::sleep_for(chrono::seconds(simulation_duration));
+
+    // Signal threads to terminate
+    should_terminate = true;
+
+    // Wait for all threads to finish
     for (auto& t : threads) {
-        t.join();
+        if (t.joinable()) {
+            t.join();
+        }
     }
+
+    atomicPrint("Simulation complete!", RED);
 
     return 0;
 }
